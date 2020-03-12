@@ -1,5 +1,6 @@
 package com.sap.bulletinboard.ads.controllers;
 
+
 import static org.hamcrest.Matchers.*;
 import static org.junit.Assert.*;
 import static org.springframework.http.HttpHeaders.*;
@@ -16,7 +17,10 @@ import java.util.regex.Pattern;
 import javax.inject.Inject;
 import javax.servlet.Filter;
 
+import com.sap.cloud.security.config.Service;
+import com.sap.cloud.security.test.SecurityTestRule;
 import org.junit.Before;
+import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.http.HttpHeaders;
@@ -33,7 +37,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sap.bulletinboard.ads.config.WebAppContextConfig;
 import com.sap.bulletinboard.ads.config.WebSecurityConfig;
-import com.sap.bulletinboard.ads.testutils.JwtGenerator;
 
 @RunWith(SpringJUnit4ClassRunner.class)
 @ContextConfiguration(classes = { WebAppContextConfig.class })
@@ -44,6 +47,15 @@ public class AdvertisementControllerTest {
     private static final String LOCATION = "Location";
     private static final String SOME_TITLE = "MyNewAdvertisement";
     private static final String SOME_OTHER_TITLE = "MyOldAdvertisement";
+
+    static final String XSAPPNAME = SecurityTestRule.DEFAULT_APP_ID;
+    static final String DISPLAY_SCOPE = XSAPPNAME + "." + WebSecurityConfig.DISPLAY_SCOPE_LOCAL;
+    static final String UPDATE_SCOPE = XSAPPNAME + "." + WebSecurityConfig.UPDATE_SCOPE_LOCAL;
+
+    @ClassRule
+    public static SecurityTestRule securityTestRule =
+            SecurityTestRule.getInstance(Service.XSUAA)
+                    .setKeys("/publicKey.txt", "/privateKey.txt");
 
     @Inject
     WebApplicationContext context;
@@ -58,10 +70,11 @@ public class AdvertisementControllerTest {
     @Before
     public void setUp() throws Exception {
         mockMvc = MockMvcBuilders.webAppContextSetup(context).addFilter(springSecurityFilterChain).build();
-        
+
         // compute valid token with Display and Update scopes
-        jwt = new JwtGenerator().getTokenForAuthorizationHeader(WebSecurityConfig.DISPLAY_SCOPE,
-                WebSecurityConfig.UPDATE_SCOPE);
+        jwt = "Bearer " + securityTestRule.getPreconfiguredJwtGenerator()
+                .withScopes(DISPLAY_SCOPE, UPDATE_SCOPE)
+                .createToken().getTokenValue();
     }
 
     @Test
@@ -164,7 +177,6 @@ public class AdvertisementControllerTest {
 
     @Test
     public void updateById() throws Exception {
-        
         MockHttpServletResponse response = mockMvc.perform(buildPostRequest(SOME_TITLE))
             .andExpect(status().isCreated())
             .andReturn().getResponse();
@@ -181,7 +193,6 @@ public class AdvertisementControllerTest {
     
     @Test
     public void updateByNotMatchingId() throws Exception {
-        
         MockHttpServletResponse response = mockMvc.perform(buildPostRequest(SOME_TITLE))
             .andExpect(status().isCreated())
             .andReturn().getResponse();
@@ -288,7 +299,9 @@ public class AdvertisementControllerTest {
     
     @Test
     public void createForbiddenWithoutUpdateScope() throws Exception {
-        String jwtReadOnly = new JwtGenerator().getTokenForAuthorizationHeader(WebSecurityConfig.DISPLAY_SCOPE);
+        String jwtReadOnly = "Bearer " + securityTestRule.getPreconfiguredJwtGenerator()
+                .withScopes(WebSecurityConfig.DISPLAY_SCOPE_LOCAL)
+                .createToken().getTokenValue();
         mockMvc.perform(buildPostRequest(SOME_TITLE, jwtReadOnly))
                 .andExpect(status().isForbidden());
     }   

@@ -2,36 +2,32 @@ package com.sap.bulletinboard.ads.config;
 
 import static org.springframework.http.HttpMethod.*;
 
+import com.sap.cloud.security.adapter.spring.SAPOfflineTokenServicesCloud;
+import com.sap.cloud.security.config.Environments;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.config.annotation.web.configuration.EnableResourceServer;
 import org.springframework.security.oauth2.config.annotation.web.configuration.ResourceServerConfigurerAdapter;
-
-import com.sap.xs2.security.commons.SAPOfflineTokenServicesCloud;
+import org.springframework.web.client.RestTemplate;
 
 @Configuration
 @EnableWebSecurity
 @EnableResourceServer
 public class WebSecurityConfig extends ResourceServerConfigurerAdapter {
-    
-    private static final String DISPLAY_SCOPE_LOCAL = "Display";
-    private static final String UPDATE_SCOPE_LOCAL = "Update";
-    public static final String REGEX_TENANT_INDEX = "(!t\\d+)?.";
-    private static final String XSAPPNAME = "bulletinboard-<<your user id>>";
-    public static final String DISPLAY_SCOPE = XSAPPNAME + "." + DISPLAY_SCOPE_LOCAL;
-    public static final String UPDATE_SCOPE = XSAPPNAME + "." + UPDATE_SCOPE_LOCAL;
+
+    public static final String DISPLAY_SCOPE_LOCAL = "Display";
+    public static final String UPDATE_SCOPE_LOCAL = "Update";
 
     // configure Spring Security, demand authentication and specific scopes
     @Override
     public void configure(HttpSecurity http) throws Exception {
         // http://docs.spring.io/spring-security/oauth/apidocs/org/springframework/security/oauth2/provider/expression/OAuth2SecurityExpressionMethods.html
-        String hasScopeUpdate = "#oauth2.hasScopeMatching('" + XSAPPNAME + REGEX_TENANT_INDEX + UPDATE_SCOPE_LOCAL
-                + "')";
-        String hasScopeDisplay = "#oauth2.hasScopeMatching('" + XSAPPNAME + REGEX_TENANT_INDEX + DISPLAY_SCOPE_LOCAL
-                + "')";
+        String hasScopeUpdate = "#oauth2.hasScopeMatching('" + UPDATE_SCOPE_LOCAL + "')";
+        String hasScopeDisplay = "#oauth2.hasScopeMatching('" + DISPLAY_SCOPE_LOCAL + "')";
 
         // @formatter:off
         http
@@ -53,7 +49,12 @@ public class WebSecurityConfig extends ResourceServerConfigurerAdapter {
     
     // configure offline verification which checks if any provided JWT was properly signed
     @Bean
+    @Profile("cloud")
     protected SAPOfflineTokenServicesCloud offlineTokenServices() {
-        return new SAPOfflineTokenServicesCloud();
+        return new SAPOfflineTokenServicesCloud(
+                Environments.getCurrent().getXsuaaConfiguration(), //optional
+                new RestTemplate())                                //optional
+                .setLocalScopeAsAuthorities(true);                 //optional
     }
+
 }
